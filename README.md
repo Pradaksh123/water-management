@@ -112,8 +112,6 @@ A key challenge in this project was managing the complexity of data ingestion.
 3. Install the required libraries using `pip install -r requirements.txt`.
 4. Run the real-time simulation and app by executing the `start.sh` script in your terminal:
 
-```bash
-sh start.sh
 
 
 
@@ -123,4 +121,5 @@ sh start.sh
 
 
 Here is a high-level overview of the project's data flow.
+
 
