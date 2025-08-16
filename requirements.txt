@@ -1,0 +1,8 @@
+supabase 
+python-dotenv 
+streamlit 
+plotly 
+pandas 
+numpy 
+langchain 
+google-generativeai 
