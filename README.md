@@ -116,18 +116,6 @@ A key challenge in this project was managing the complexity of data ingestion.
 sh start.sh
 
 
-<img width="1917" height="913" alt="image" src="https://github.com/user-attachments/assets/306f22de-c78f-4070-99b0-814a29f6512d" />
-
-<img width="1914" height="850" alt="image" src="https://github.com/user-attachments/assets/a91b4496-7ea5-478b-832a-c1ee2dfe5eac" />
-
-<img width="1908" height="903" alt="image" src="https://github.com/user-attachments/assets/c0b11913-c666-4c05-a921-c03ccd8f18a0" />
-
-<img width="1917" height="905" alt="image" src="https://github.com/user-attachments/assets/3c173e92-bc0d-45c7-ad75-ab4533dc886a" />
-
-<img width="1919" height="847" alt="image" src="https://github.com/user-attachments/assets/66b2041e-322d-4cf6-b3af-29560c40e31a" />
-
-<img width="1916" height="898" alt="image" src="https://github.com/user-attachments/assets/f727865c-1488-4e94-845c-bfdcb413ad84" />
-
 
 
 
@@ -135,3 +123,4 @@ sh start.sh
 
 
 Here is a high-level overview of the project's data flow.
+
