@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd 
 import numpy as np 
 from supabase import create_client 
-from langchain_google_genai import ChatGoogleGenerativeAI 
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import ChatPromptTemplate 
 from langchain_core.output_parsers import StrOutputParser 
 import os 
@@ -19,7 +19,7 @@ load_dotenv()
 # --- Page configuration --- 
 st.set_page_config( 
     page_title="Water Management System", 
-    page_icon="?", 
+    page_icon="💧", 
     layout="wide", 
     initial_sidebar_state="expanded" 
 ) 
@@ -57,16 +57,17 @@ CONFIG = {
     } 
 } 
 
-# --- CSS styling with light blue header --- 
+# --- CSS styling with updated header --- 
 st.markdown(""" 
 <style> 
     .main-header { 
-        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%); 
-        color: lightblue; 
+        background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); 
+        color: white; 
         padding: 20px; 
         border-radius: 10px; 
         margin-bottom: 20px; 
         text-align: center; 
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     } 
     .metric-card { 
         background: #f0f2f6; 
@@ -176,35 +177,64 @@ def fetch_recent_data(hours=24):
         st.error(f"Failed to fetch recent data: {e}") 
         return pd.DataFrame(), pd.DataFrame() 
 
-# --- Updated Chatbot class --- 
+# --- Updated Chatbot class with strict table structure guidelines ---
 class WaterChatBot: 
     def __init__(self): 
         try: 
             self.supabase = create_client(CONFIG["SUPABASE_URL"], CONFIG["SUPABASE_KEY"]) 
-            self.llm = ChatGoogleGenerativeAI( 
-                model="gemini-1.5-flash", 
-                google_api_key=CONFIG["GEMINI_API_KEY"] 
+            self.llm = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                google_api_key=CONFIG["GEMINI_API_KEY"],
+                temperature=0.3
             ) 
-            self.prompt_template = ChatPromptTemplate.from_messages([ 
-                ("system", """ 
-                You are a water management expert analyzing data from June 1 to July 1 2025. 
-                Current alerts: {alerts} 
-                 
-                Strict Rules: 
-                1. Only use data from the provided CSV (from Supabase database) 
-                2. Never mention location for water quality parameters (location data not available) 
-                3. For flow data, you may mention location when available 
-                4. Highlight values outside safe ranges 
-                5. Never invent data outside June-July 2025 
-                6. If asked about location for water quality, state that this data is not available 
-                """), 
-                ("human", """ 
-                Question: {question} 
-                 
-                Data (CSV): 
-                {context} 
-                """) 
-            ]) 
+            self.prompt_template = ChatPromptTemplate.from_messages([
+                ("system", """
+                You are an expert water management system analyst with access to:
+                1. Water quality data (water_quality table)
+                2. Flow rate data (flow_rate table)
+                
+                Database Schema:
+                - water_quality: timestamp, parameter_name, value
+                - flow_rate: timestamp, location_name, totalizer
+                
+                Strict Guidelines:
+                1. Always check the database first for any query
+                2. For real-time alerts, refer to the alerts monitoring system
+                3. For historical data (June-July 2025), query the Supabase database
+                4. When presenting data, strictly follow these table formats:
+                   - For water quality data (only these columns):
+                     ```
+                     | Timestamp            | Parameter | Value | Status       |
+                     |----------------------|-----------|-------|--------------|
+                     | 2025-06-15 08:30:00 | pH        | 7.2   | Normal       |
+                     | 2025-06-15 09:45:00 | TDS       | 850   | Normal       |
+                     | 2025-06-15 10:15:00 | BOD       | 6.2   | Out of Range |
+                     ```
+                   - For flow data (only these columns):
+                     ```
+                     | Timestamp            | Location              | Totalizer |
+                     |----------------------|-----------------------|-----------|
+                     | 2025-06-15 08:30:00 | Ground Water Source 1 | 4500      |
+                     | 2025-06-15 09:45:00 | Industrial Process    | 3200      |
+                     ```
+                5. Never add columns that don't exist in the original tables
+                6. For quality data, mark status as:
+                   - "Normal" when within safe ranges
+                   - "Out of Range" when outside safe ranges
+                7. For flow data, only show the data without status indicators
+                8. Always include 6-7 representative entries in tables
+                9. Safe ranges for quality parameters:
+                   {safe_ranges}
+                """),
+                ("human", """
+                Question: {question}
+                
+                Current Alerts: {alerts}
+                
+                Data Context (CSV):
+                {context}
+                """)
+            ])
             self.chain = self.prompt_template | self.llm | StrOutputParser() 
         except Exception as e: 
             st.error(f"Failed to initialize chatbot: {str(e)}") 
@@ -229,13 +259,13 @@ class WaterChatBot:
 
     def check_alerts(self): 
         alerts = [] 
-        df = self.fetch_data(CONFIG["TABLES"]["quality"]) 
-         
-        if not df.empty: 
-            df['value'] = pd.to_numeric(df['value'], errors='coerce') 
-            df.dropna(subset=['value'], inplace=True) 
+        quality_df, _ = fetch_recent_data(hours=24)
+        
+        if not quality_df.empty: 
+            quality_df['value'] = pd.to_numeric(quality_df['value'], errors='coerce') 
+            quality_df.dropna(subset=['value'], inplace=True) 
 
-            for _, row in df.iterrows(): 
+            for _, row in quality_df.iterrows(): 
                 param = row['parameter_name'] 
                 min_val, max_val = CONFIG["SAFE_RANGES"].get(param, (None, None)) 
                 if min_val and (row['value'] < min_val or row['value'] > max_val): 
@@ -248,12 +278,20 @@ class WaterChatBot:
              
         alerts = self.check_alerts() 
         alert_status = "✅ All parameters normal" if not alerts else "\n".join(alerts) 
+        
+        # Format safe ranges for the prompt
+        safe_ranges = "\n".join([f"{k}: {v}" for k, v in CONFIG["SAFE_RANGES"].items()])
          
-        if "flow" in question.lower(): 
-            df = self.fetch_data(CONFIG["TABLES"]["flow"]) 
+        # Determine which data to fetch based on question
+        if "flow" in question.lower() or "location" in question.lower(): 
+            df = self.fetch_data(CONFIG["TABLES"]["flow"])
+            if "recent" in question.lower() or "current" in question.lower():
+                df, _ = fetch_recent_data(hours=24)
         else: 
             params = [p for p in CONFIG["PARAMETERS"] if p.lower() in question.lower()] 
-            df = self.fetch_data(CONFIG["TABLES"]["quality"], params=params if params else None) 
+            df = self.fetch_data(CONFIG["TABLES"]["quality"], params=params if params else None)
+            if "recent" in question.lower() or "current" in question.lower():
+                df, _ = fetch_recent_data(hours=24)
          
         if df.empty: 
             return "No relevant data found for your query." 
@@ -261,19 +299,15 @@ class WaterChatBot:
         return self.chain.invoke({ 
             "question": question, 
             "context": df.to_csv(), 
-            "alerts": alert_status 
+            "alerts": alert_status,
+            "safe_ranges": safe_ranges
         }) 
 
 # --- Dashboard functions --- 
 def show_dashboard(): 
-    if st.session_state.get('data_mode') == 'live': 
-        st.title("🌊 Water Management Dashboard (Live Data)") 
-        st.markdown('<div class="header">Live Performance Overview</div>', unsafe_allow_html=True) 
-        flow_df, quality_df = fetch_recent_data(hours=24) 
-    else: 
-        st.title("🌊 Water Management Dashboard (Historical Data)") 
-        st.markdown('<div class="header">June 2025 Performance Overview (80% Historical Data)</div>', unsafe_allow_html=True) 
-        flow_df, quality_df = fetch_split_data(mode='historical') 
+    st.title("🌊 Water Management Dashboard") 
+    st.markdown('<div class="header">Performance Overview</div>', unsafe_allow_html=True) 
+    flow_df, quality_df = fetch_split_data(mode='historical') 
      
     if flow_df.empty and quality_df.empty: 
         st.warning("No data available. Please check your database connection.") 
@@ -369,12 +403,8 @@ def show_dashboard():
 
 # --- Analytics panel --- 
 def show_analytics(): 
-    if st.session_state.get('data_mode') == 'live': 
-        st.markdown("### 📊 Advanced Analytics (Live Data)") 
-        flow_df, quality_df = fetch_recent_data(hours=24) 
-    else: 
-        st.markdown("### 📊 Advanced Analytics (Historical Data)") 
-        flow_df, quality_df = fetch_split_data(mode='historical') 
+    st.markdown("### 📊 Advanced Analytics") 
+    flow_df, quality_df = fetch_split_data(mode='historical') 
      
     try: 
         if quality_df.empty and flow_df.empty: 
@@ -651,10 +681,10 @@ def main():
      
     st.markdown(""" 
     <div class="main-header"> 
-        <h1>🌊 Water Management System</h1> 
-        <p>Real-time monitoring, analytics, and AI-powered insights for water quality management</p> 
+        <h1 style="color: white;">🌊 Water Management System</h1> 
+        <p style="color: white;">Real-time monitoring, analytics, and AI-powered insights for water quality management</p> 
     </div> 
-    """, unsafe_allow_html=True) 
+    """, unsafe_allow_html=True)
      
     with st.sidebar: 
         st.markdown("### 🧭 Navigation") 
@@ -668,10 +698,6 @@ def main():
         st.markdown("---") 
          
         st.markdown("### ⚡ Quick Actions") 
-         
-        if st.button("▶️ Show Live Data", use_container_width=True): 
-            st.session_state.data_mode = 'live' 
-            st.rerun() 
          
         if st.button("🔄 Refresh Data", use_container_width=True, key="main_refresh"): 
             st.rerun() 
